@@ -16,6 +16,7 @@ using PepperDash.Essentials.Bridges;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Crestron.SimplSharpPro.Diagnostics;
 using Tesira_DSP_EPI.Bridge;
+using Tesira_DSP_EPI.Helpers;
 
 namespace Tesira_DSP_EPI
 {
@@ -51,6 +52,8 @@ namespace Tesira_DSP_EPI
 
 		private CTimer WatchdogTimer;
 
+        public BiampResponseProcessor Queue;
+
 		public Dictionary<string, TesiraDspLevelControl> LevelControlPoints { get; private set; }
 		public Dictionary<string, TesiraDspDialer> Dialers { get; private set; }
 		public Dictionary<string, TesiraDspSwitcher> Switchers { get; private set; }
@@ -59,9 +62,9 @@ namespace Tesira_DSP_EPI
 
 		DeviceConfig _Dc;
 
-		CrestronQueue CommandQueue;
+		//CrestronQueue CommandQueue;
 
-		bool CommandQueueInProgress = false;
+		//bool CommandQueueInProgress = false;
 		//uint HeartbeatTracker = 0;
 		public bool ShowHexResponse { get; set; }
 		public TesiraDsp(string key, string name, IBasicCommunication comm, DeviceConfig dc)
@@ -75,7 +78,7 @@ namespace Tesira_DSP_EPI
 
 			//Watchdog = new TesiraDspWatchdog("WatchDog", this);
 
-			CommandQueue = new CrestronQueue(100);
+			//CommandQueue = new CrestronQueue(100);
 			Communication = comm;
 			var socket = comm as ISocketStatus;
 			if (socket != null)
@@ -107,7 +110,6 @@ namespace Tesira_DSP_EPI
 		{
 			Communication.Connect();
 			CommunicationMonitor.StatusChange += (o, a) => { Debug.Console(2, this, "Communication monitor state: {0}", CommunicationMonitor.Status); };
-			CommunicationMonitor.Start();
 
 			CrestronConsole.AddNewConsoleCommand(SendLine, "send" + Key, "", ConsoleAccessLevelEnum.AccessOperator);
 			CrestronConsole.AddNewConsoleCommand(s => Communication.Connect(), "con" + Key, "", ConsoleAccessLevelEnum.AccessOperator);
@@ -120,13 +122,13 @@ namespace Tesira_DSP_EPI
 
 			if (e.Client.IsConnected)
 			{
-				//SubscribeToAttributes();
+                CommunicationMonitor.Start();
 			}
 			else
 			{
 				// Cleanup items from this session
-				CommandQueue.Clear();
-				CommandQueueInProgress = false;
+				Queue._tasks.Clear();
+				//CommandQueueInProgress = false;
 			}
 		}
 
@@ -134,6 +136,8 @@ namespace Tesira_DSP_EPI
 
 		public void CreateDspObjects()
 		{
+            Debug.Console(2, this, "Initializing Queue");
+            Queue = new BiampResponseProcessor(this);
 			Debug.Console(2, "Creating DSP Objects");
 			TesiraDspPropertiesConfig props = JsonConvert.DeserializeObject<TesiraDspPropertiesConfig>(_Dc.Properties.ToString());
 
@@ -320,29 +324,16 @@ namespace Tesira_DSP_EPI
 						return;
 					// response is not from a subscribed attribute.  From a get/set/toggle/increment/decrement command
 
-					if (!CommandQueue.IsEmpty)
+                    if (!Queue._tasks.IsEmpty)
 					{
-						if (CommandQueue.Peek() is QueuedCommand)
+						if (Queue._tasks.Peek() is QueuedCommand)
 						{
 							// Expected response belongs to a child class
-							QueuedCommand tempCommand = (QueuedCommand)CommandQueue.TryToDequeue();
+							QueuedCommand tempCommand = (QueuedCommand)Queue._tasks.TryToDequeue();
 							//Debug.Console(1, this, "Command Dequeued. CommandQueue Size: {0}", CommandQueue.Count);
 
 							tempCommand.ControlPoint.ParseGetMessage(tempCommand.AttributeCode, args.Text);
 						}
-						else
-						{
-							// Expected response belongs to this class
-							string temp = (string)CommandQueue.TryToDequeue();
-							//Debug.Console(1, this, "Command Dequeued. CommandQueue Size: {0}", CommandQueue.Count);
-
-						}
-
-						if (CommandQueue.IsEmpty)
-							CommandQueueInProgress = false;
-						else
-							SendNextQueuedCommand();
-
 					}
 				}
 				else if (args.Text.IndexOf("-ERR") > -1)
@@ -409,6 +400,14 @@ namespace Tesira_DSP_EPI
 			Communication.SendText(s);
 		}
 
+
+        public void EnqueueCommand(QueuedCommand commandToEnqueue) {
+            Queue.EnqueueTask(commandToEnqueue);
+            Debug.Console(1, this, "Command (QueuedCommand) Enqueued '{0}'.  CommandQueue has '{1}' Elements.", commandToEnqueue.Command, Queue._tasks.Count);
+        }
+
+
+        /*
 		/// <summary>
 		/// Adds a command from a child module to the queue
 		/// </summary>
@@ -440,7 +439,7 @@ namespace Tesira_DSP_EPI
 		/// </summary>
 		void SendNextQueuedCommand()
 		{
-			if (Communication.IsConnected && !CommandQueue.IsEmpty)
+			if (Communication.IsConnected && !Queue._tasks.IsEmpty)
 			{
 				CommandQueueInProgress = true;
 				if (CommandQueue.Peek() is QueuedCommand)
@@ -457,6 +456,7 @@ namespace Tesira_DSP_EPI
 			}
 
 		}
+         */
 
 		/// <summary>
 		/// Initiates the subscription process to the DSP
@@ -492,9 +492,10 @@ namespace Tesira_DSP_EPI
 				if (dialer.Value.Enabled)
 					dialer.Value.Subscribe();
 			}
-
+            /*
 			if (!CommandQueueInProgress)
 				SendNextQueuedCommand();
+             */
 
 			ResetSubscriptionTimer();
 
@@ -527,39 +528,6 @@ namespace Tesira_DSP_EPI
 			public string Command { get; set; }
 			public string AttributeCode { get; set; }
 			public TesiraDspControlPoint ControlPoint { get; set; }
-		}
-
-		protected override void CustomSetConfig(DeviceConfig config)
-		{
-			ConfigWriter.UpdateDeviceConfig(config);
-		}
-
-		public void SetIpAddress(string hostname)
-		{
-			try
-			{
-				if (hostname.Length > 2 & _Dc.Properties["control"]["tcpSshProperties"]["address"].ToString() != hostname)
-				{
-					Debug.Console(2, this, "Changing IPAddress: {0}", hostname);
-					Communication.Disconnect();
-
-					(Communication as GenericTcpIpClient).Hostname = hostname;
-
-					_Dc.Properties["control"]["tcpSshProperties"]["address"] = hostname;
-					CustomSetConfig(_Dc);
-					Communication.Connect();
-				}
-			}
-			catch (Exception e)
-			{
-				if (Debug.Level == 2)
-					Debug.Console(2, this, "Error SetIpAddress: '{0}'", e);
-			}
-		}
-
-		public void WriteConfig()
-		{
-			CustomSetConfig(_Dc);
 		}
 
 

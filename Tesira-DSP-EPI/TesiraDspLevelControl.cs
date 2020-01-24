@@ -51,7 +51,7 @@ namespace Tesira_DSP_EPI {
             }
             set {
                 _MinLevel = value;
-                SendFullCommand("get", "maxLevel", null, 1);
+                SendSubscriptionCommand(LevelCustomName, "level", 250, 1);
             }
         }
 
@@ -65,7 +65,7 @@ namespace Tesira_DSP_EPI {
             }
             set {
                 _MaxLevel = value;
-                SendSubscriptionCommand(LevelCustomName, "level", 250, 1);
+                SendFullCommand("get", "minLevel", null, 1);
             }
         }
 
@@ -192,7 +192,7 @@ namespace Tesira_DSP_EPI {
 			{
 				// MUST use InstanceTag1 for levels, it is the first instance tag in the JSON config
 				LevelCustomName = string.Format("{0}~level{1}", this.InstanceTag1, this.Index1);
-				SendFullCommand("get", "minLevel", null, 1);
+				SendFullCommand("get", "maxLevel", null, 1);
 			}
         }
 
