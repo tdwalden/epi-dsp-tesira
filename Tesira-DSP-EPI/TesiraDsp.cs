@@ -38,6 +38,8 @@ namespace Tesira_DSP_EPI
 			return newMe;
 		}
 
+        public bool ProcessCommand { get; set; }
+
 		public string DeviceRx { get; set; }
 
 		public IBasicCommunication Communication { get; private set; }
@@ -80,6 +82,7 @@ namespace Tesira_DSP_EPI
 
 			//CommandQueue = new CrestronQueue(100);
 			Communication = comm;
+            ProcessCommand = false;
 			var socket = comm as ISocketStatus;
 			if (socket != null)
 			{
@@ -122,7 +125,7 @@ namespace Tesira_DSP_EPI
 
 			if (e.Client.IsConnected)
 			{
-                CommunicationMonitor.Start();
+                
 			}
 			else
 			{
@@ -244,11 +247,14 @@ namespace Tesira_DSP_EPI
 
 				this.CommandPassthruFeedback.FireUpdate();
 
-				if (args.Text.IndexOf("Welcome to the Tesira Text Protocol Server...") > -1)
+				if (args.Text.IndexOf("Welcome") > -1)
 				{
 					// Indicates a new TTP session
 					// moved to CustomActivate() method
 					//CommunicationMonitor.Start();
+
+                    Debug.Console(2, this, "Starting Communications Monitor");
+                    CommunicationMonitor.Start();
 
 					SubscribeToAttributes();
 				}
@@ -329,10 +335,12 @@ namespace Tesira_DSP_EPI
 						if (Queue._tasks.Peek() is QueuedCommand)
 						{
 							// Expected response belongs to a child class
-							QueuedCommand tempCommand = (QueuedCommand)Queue._tasks.TryToDequeue();
-							//Debug.Console(1, this, "Command Dequeued. CommandQueue Size: {0}", CommandQueue.Count);
+                            QueuedCommand tempCommand = (QueuedCommand)Queue._tasks.TryToDequeue();
+                            Debug.Console(1, this, "Command Dequeued. CommandQueue Size: {0}", Queue._tasks.Count);
+                            Debug.Console(2, this, "Dequeued Command " + tempCommand);
 
 							tempCommand.ControlPoint.ParseGetMessage(tempCommand.AttributeCode, args.Text);
+                            ProcessCommand = false;
 						}
 					}
 				}
@@ -344,7 +352,7 @@ namespace Tesira_DSP_EPI
 					{
 						case "-ERR ALREADY_SUBSCRIBED":
 							{
-								ResetSubscriptionTimer();
+								//StartSubscriptionWatchdog();
 								break;
 							}
 						default:
@@ -463,7 +471,7 @@ namespace Tesira_DSP_EPI
 		/// </summary>
 		void SubscribeToAttributes()
 		{
-			SendLine("SESSION set verbose false");
+			//SendLine("SESSION set verbose false");
 
 			Debug.Console(2, this, "There are {0} Level Objects", LevelControlPoints.Count());
 			foreach (KeyValuePair<string, TesiraDspLevelControl> level in LevelControlPoints)
@@ -497,28 +505,21 @@ namespace Tesira_DSP_EPI
 				SendNextQueuedCommand();
              */
 
-			ResetSubscriptionTimer();
+			StartSubscriptionWatchdog();
 
 		}
 
 		/// <summary>
 		/// Resets or Sets the subscription timer
 		/// </summary>
-		void ResetSubscriptionTimer()
+		void StartSubscriptionWatchdog()
 		{
 			Debug.Console(2, this, "Reset Subscription Timer Fired");
 			isSubscribed = true;
 
-			if (WatchdogTimer != null)
+			if(WatchdogTimer == null)
 			{
-				WatchdogTimer.Stop();
-				WatchdogTimer = null;
-				WatchdogTimer = new CTimer(o => SubscribeToAttributes(), 90000);
-				//SubscriptionTimer.Reset();
-			}
-			else
-			{
-				WatchdogTimer = new CTimer(o => SubscribeToAttributes(), 90000);
+				WatchdogTimer = new CTimer(o => SubscribeToAttributes(), 90000, 90000);
 				//SubscriptionTimer.Reset();
 			}
 		}
