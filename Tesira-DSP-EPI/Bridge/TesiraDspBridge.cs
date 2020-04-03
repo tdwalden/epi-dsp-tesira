@@ -86,7 +86,7 @@ namespace Tesira_DSP_EPI.Bridge {
 
                     trilist.SetSigTrueAction(stateJoinMap.Toggle + x, () => s.Value.StateToggle());
                     trilist.SetSigTrueAction(stateJoinMap.On + x, () => s.Value.StateOn());
-                    trilist.SetSigTrueAction(stateJoinMap.Off + x, () => s.Value.StateOff());
+                    trilist.SetSigTrueAction(stateJoinMap.Off + x, () => s.Value.StateOff());          
                 }
                 x++;
             }
@@ -95,8 +95,7 @@ namespace Tesira_DSP_EPI.Bridge {
             //Source Selectors
             x = 0;
             Debug.Console(2, DspDevice, "There are {0} SourceSelector Control Points", DspDevice.Switchers.Count());
-            foreach (var item in DspDevice.Switchers) {
-                var switcher = item;
+            foreach (var switcher in DspDevice.Switchers) {
                 Debug.Console(2, DspDevice, "Tesira Switcher {0} connect to {1}", switcher.Key, x);
                 if (switcher.Value.Enabled) {
                     ushort y = (ushort)((x * 2) + 1);
@@ -114,6 +113,8 @@ namespace Tesira_DSP_EPI.Bridge {
 
                     trilist.StringInput[switcherJoinMap.SourceSelectorLabel + y].StringValue = switcher.Value.Label;
 
+
+                    //trilist.SetSigTrueAction(joinMap.SourceSelectorMake + y, () => switcher.Value.MakeRoute());
                 }
                 x++;
             }
@@ -192,42 +193,30 @@ namespace Tesira_DSP_EPI.Bridge {
 
                 lineOffset += 50;
             }
+            
 
-            var meterJoinMap = new TesiraMeterJoinMap(joinStart);
-            Debug.Console(2, DspDevice, "There are {0} Meter Control Points", DspDevice.Meters.Count);
-            for (int meterJoin = 0; meterJoin < DspDevice.Meters.Count; meterJoin++)
-            {
-                var joinActual = meterJoinMap.MeterJoin + meterJoin;                
-                var meter = DspDevice.Meters.ElementAtOrDefault(meterJoin);
-                if (meter.Key == null) continue;
-
-                Debug.Console(2, DspDevice, "AddingMeterBridge {0} | Join:{1}", meter.Key, joinActual);
-                meter.Value.MeterFeedback.LinkInputSig(trilist.UShortInput[(uint)joinActual]);
-                meter.Value.LabelFeedback.LinkInputSig(trilist.StringInput[(uint)joinActual]);
-                meter.Value.SubscribedFeedback.LinkInputSig(trilist.BooleanInput[(uint)joinActual]);
-
-                trilist.SetSigTrueAction((uint)joinActual, meter.Value.Subscribe);
-                trilist.SetSigFalseAction((uint)joinActual, meter.Value.UnSubscribe);
-            }
-
-            var matrixMixerJoinMap = new TesiraMatrixMixerJoinMap(joinStart);
-            Debug.Console(2, DspDevice, "There are {0} MatrixMixer Control Points", DspDevice.MatrixMixers.Count);
-            for (int matrixMixer = 0; matrixMixer < DspDevice.MatrixMixers.Count; matrixMixer++)
-            {
-                var toggleJoin = matrixMixerJoinMap.Toggle + matrixMixer;
-                var onJoin = matrixMixerJoinMap.On + matrixMixer;
-                var offJoin = matrixMixerJoinMap.Off + matrixMixer;
-
-                var mixer = DspDevice.MatrixMixers.ElementAtOrDefault(matrixMixer);
-                if (mixer.Key == null) continue;
-
-                Debug.Console(2, DspDevice, "Adding MatrixMixer ControlPoint {0} | JoinStart:{1}", mixer.Key, toggleJoin);
-                mixer.Value.StateFeedback.LinkInputSig(trilist.BooleanInput[(uint)toggleJoin]);
-
-                trilist.SetSigTrueAction((uint)toggleJoin, mixer.Value.StateToggle);
-                trilist.SetSigTrueAction((uint)onJoin, mixer.Value.StateOn);
-                trilist.SetSigTrueAction((uint)offJoin, mixer.Value.StateOff);
-            }
         }
     }
+    /*
+    public class TesiraDspDeviceJoinMap : JoinMapBase {
+        public uint IsOnline { get; set; }
+        
+        
+        public TesiraDspDeviceJoinMap() {
+
+            
+            //Digital
+            IsOnline = 1;
+            
+        }
+
+        public override void OffsetJoinNumbers(uint joinStart) {
+            var joinOffset = joinStart - 1;
+            var properties = this.GetType().GetCType().GetProperties().Where(o => o.PropertyType == typeof(uint)).ToList();
+            foreach (var property in properties) {
+                property.SetValue(this, (uint)property.GetValue(this, null) + joinOffset, null);
+            }
+        }
+    }*/
+
 }

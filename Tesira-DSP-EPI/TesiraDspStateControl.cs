@@ -56,13 +56,6 @@ namespace Tesira_DSP_EPI {
             GetState();
         }
 
-        public override void Unsubscribe()
-        {
-            StateCustomName = string.Format("{0}~state{1}", this.InstanceTag1, this.Index1);
-            Debug.Console(2, this, "StateCustomName = {0}", StateCustomName);
-            SendUnSubscriptionCommand(StateCustomName, "state", 1);
-        }
-
         /// <summary>
         /// Parses the response from the DspBase
         /// </summary>

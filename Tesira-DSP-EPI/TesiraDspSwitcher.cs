@@ -56,13 +56,6 @@ namespace Tesira_DSP_EPI {
             SendSubscriptionCommand(SelectorCustomName, "sourceSelection", 250, 1);
         }
 
-        public override void Unsubscribe()
-        {
-            SelectorCustomName = string.Format("{0}~Selector{1}", this.InstanceTag1, this.Index1);
-
-            SendUnSubscriptionCommand(SelectorCustomName, "sourceSelection", 1);
-        }
-
         public void ParseSubscriptionMessage(string customName, string value) {
 
             // Check for valid subscription response
